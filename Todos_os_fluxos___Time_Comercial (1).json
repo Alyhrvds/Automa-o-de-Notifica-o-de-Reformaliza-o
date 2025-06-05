@@ -1,0 +1,1433 @@
+{
+  "name": "Todos os fluxos - Time Comercial",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "37e40ffb-2807-4a07-984f-0956473fe727",
+        "formTitle": "Upload Planilha - Gráfico em Anexo",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Planilha",
+              "fieldType": "file",
+              "multipleFiles": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Receber Planilha",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [
+        -2380,
+        -405
+      ],
+      "id": "20eba106-1815-435d-a992-a07b8e98b29b",
+      "webhookId": "37e40ffb-2807-4a07-984f-0956473fe727"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "Planilha",
+        "options": {}
+      },
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -2160,
+        -405
+      ],
+      "id": "9a0deb27-b4e2-4d70-b700-cee95ba83fb1"
+    },
+    {
+      "parameters": {
+        "authentication": "basicAuth",
+        "requestMethod": "POST",
+        "url": "https://hcti.io/v1/image",
+        "options": {},
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "html",
+              "value": "={{ $json.html }}"
+            }
+          ]
+        }
+      },
+      "name": "Converter HTML em Imagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -1060,
+        -730
+      ],
+      "id": "c7a42785-4b38-4875-b2b0-68dd472aa23a",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "Tu62KiCrdKvStrNE",
+          "name": "html css to image"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "responseFormat": "file",
+        "dataPropertyName": "tabela",
+        "options": {},
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "fileName",
+              "value": "=indicadores_corban_{{ $now.format('DD') }}.png"
+            }
+          ]
+        }
+      },
+      "name": "Baixar Imagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -840,
+        -730
+      ],
+      "id": "ce6ead82-33cb-457f-8332-a592bbbe7adb"
+    },
+    {
+      "parameters": {
+        "functionCode": "const dados = items;\nlet propostasReformalizadas = 0;\nlet saldoDigitado = 0;\nlet saldoRetornado = 0;\nlet porComercial = {};\nlet porCorbanMaster = {}; // <- novo\n\nfor (const item of dados) {\n  const linha = item.json;\n\n  if (linha[\"StatusPort\"] === \"REFORMALIZACAO_CLIENTE\") {\n    propostasReformalizadas++;\n    saldoDigitado += parseFloat(linha[\"Saldo digitado\"]) || 0;\n    saldoRetornado += parseFloat(linha[\"Saldo retornado\"]) || 0;\n\n    const comercial = linha[\"Comercial\"] || \"Não informado\";\n    porComercial[comercial] = (porComercial[comercial] || 0) + 1;\n\n    const corbanMaster = linha[\"Corban Master\"] || \"Não informado\";\n    const corbanLoja = linha[\"Corban Loja\"];\n    const nomeExibicao = corbanLoja\n      ? `${corbanMaster} - ${corbanLoja}`\n      : corbanMaster;\n\n    porCorbanMaster[nomeExibicao] = (porCorbanMaster[nomeExibicao] || 0) + 1;\n  }\n}\n\nreturn [\n  {\n    json: {\n      indicadores: {\n        propostasReformalizadas,\n        saldoDigitado,\n        saldoRetornado,\n        porComercial,\n        porCorbanMaster, // <- novo\n      }\n    }\n  }\n];"
+      },
+      "name": "Calcular Indicadores1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1500,
+        -730
+      ],
+      "id": "b04d697c-d138-4837-b8c1-d22878c53a3f"
+    },
+    {
+      "parameters": {
+        "toRecipients": "alice.santos@byx.com.br",
+        "subject": "Anexo antigo",
+        "bodyContent": "Antigo",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "tabela"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -620,
+        -730
+      ],
+      "id": "7fa6ddcf-d81a-49ae-b039-41543c9e5122",
+      "name": "Microsoft Outlook",
+      "webhookId": "00eac2df-df8e-40f9-9147-4e7d60280f32",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  // Se não houver campo binário, retorna o item como está\n  if (!item.binary) {\n    return item;\n  }\n\n  const oldKey = Object.keys(item.binary)[0];\n\n  // Clona o binário para \"data\"\n  item.binary[\"data\"] = item.binary[oldKey];\n\n  // Renomeia\n  item.binary[\"data\"].fileName = \"indicadores_renomeado.png\";\n  item.binary[\"data\"].mimeType = \"image/png\";\n  item.binary[\"data\"].fileExtension = \"png\";\n\n  // Remove o binário original (ex: se era \"file\" ou outro nome)\n  if (oldKey !== \"data\") {\n    delete item.binary[oldKey];\n  }\n\n  return item;\n});"
+      },
+      "name": "Renomear Anexo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -780
+      ],
+      "id": "37fcee90-27b4-4a64-a9ee-4ebe4f15643b"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.bodyPreview }}",
+        "additionalFields": {
+          "toRecipients": "={{ $json.toRecipients[0].emailAddress.address }}"
+        }
+      },
+      "name": "Criar Rascunho",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        -580
+      ],
+      "id": "7dff1404-87e0-412a-a9e1-719e1ca79220",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex",
+        "join": "inner"
+      },
+      "name": "Merge1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        700,
+        -730
+      ],
+      "id": "e09695aa-019f-46e6-97a8-1481b9e0275f",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "toRecipients": "alice.santos@byx.com.br",
+        "subject": "=Indicadores Reformalização – Envio Diário",
+        "bodyContent": "Prezado(a),<br><br>\n\nSegue em anexo o gráfico atualizado com os indicadores consolidados da reformalização.<br><br>\n\n<strong>Importante:</strong> verifiquem se todas as informações estão corretas antes de encaminhar.<br><br>\n\nEm caso de dúvida ou inconsistência, entrem em contato com a equipe responsável pelo fluxo de reformalização.<br><br>\n\nAtenciosamente,<br>\n<strong>Jarvis</strong><br>\nGrupo BYX",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "data"
+              }
+            ]
+          },
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        920,
+        -730
+      ],
+      "id": "22529b59-046a-485c-a321-04bbd5ab947a",
+      "name": "Microsoft Outlook1",
+      "webhookId": "889cbcbd-5f89-4947-ab95-8c588429f7ee",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const indicadores = $json.indicadores;\nconst total = indicadores.propostasReformalizadas || 0;\nconst saldoDigitado = indicadores.saldoDigitado || 0;\nconst saldoRetornado = indicadores.saldoRetornado || 0;\nconst porComercial = indicadores.porComercial || {};\nconst porCorbanMaster = indicadores.porCorbanMaster || {};\n\nfunction formatarNumero(num) {\n  return Number(num).toLocaleString('pt-BR', { maximumFractionDigits: 0 });\n}\n\nconst grafico1 = `\n<canvas id=\"grafico1\" width=\"700\" height=\"500\"></canvas>\n<script>\n  new Chart(document.getElementById('grafico1'), {\n    type: 'bar',\n    data: {\n      labels: ['Propostas Reformalizadas', 'Saldo Digitado', 'Saldo Retornado'],\n      datasets: [{\n        label: 'Indicadores Gerais',\n        data: [${total}, ${saldoDigitado}, ${saldoRetornado}],\n        backgroundColor: ['#1f77b4', '#ff7f0e', '#2ca02c']\n      }]\n    },\n    options: {\n      plugins: {\n        legend: { display: false },\n        datalabels: {\n          anchor: 'end',\n          align: 'top',\n          font: { weight: 'bold', size: 16 },\n          formatter: v => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 }),\n          color: '#000'\n        }\n      },\n      scales: {\n        x: {\n          ticks: { font: { weight: 'bold', size: 14 }, color: '#333' }\n        },\n        y: {\n          beginAtZero: true,\n          ticks: { font: { weight: 'bold' }, color: '#333' }\n        }\n      }\n    },\n    plugins: [ChartDataLabels]\n  });\n</script>\n`;\n\nconst grafico2 = `\n<canvas id=\"grafico2\" width=\"700\" height=\"500\"></canvas>\n<script>\n  new Chart(document.getElementById('grafico2'), {\n    type: 'bar',\n    data: {\n      labels: [${Object.keys(porComercial).map(k => `'${k}'`).join(',')}],\n      datasets: [{\n        label: 'Reformalizações por Comercial',\n        data: [${Object.values(porComercial).join(',')}],\n        backgroundColor: '#4e79a7'\n      }]\n    },\n    options: {\n      plugins: {\n        legend: { display: false },\n        datalabels: {\n          anchor: 'end',\n          align: 'top',\n          font: { weight: 'bold', size: 16 },\n          color: '#000'\n        }\n      },\n      scales: {\n        x: {\n          ticks: { maxRotation: 45, minRotation: 30, font: { weight: 'bold' }, color: '#333' }\n        },\n        y: {\n          beginAtZero: true,\n          ticks: { font: { weight: 'bold' }, color: '#333' }\n        }\n      }\n    },\n    plugins: [ChartDataLabels]\n  });\n</script>\n`;\n\nconst grafico3 = `\n<canvas id=\"grafico3\" width=\"1200\" height=\"500\"></canvas>\n<script>\n  new Chart(document.getElementById('grafico3'), {\n    type: 'bar',\n    data: {\n      labels: [${Object.keys(porCorbanMaster).map(k => `'${k}'`).join(',')}],\n      datasets: [{\n        label: 'Reformalizações por Corban Master',\n        data: [${Object.values(porCorbanMaster).join(',')}],\n        backgroundColor: '#f28e2c'\n      }]\n    },\n    options: {\n      indexAxis: 'x',\n      plugins: {\n        legend: { display: false },\n        datalabels: {\n          anchor: 'end',\n          align: 'top',\n          font: { weight: 'bold', size: 14 },\n          color: '#000'\n        }\n      },\n      scales: {\n        x: {\n          ticks: { maxRotation: 60, minRotation: 45, font: { weight: 'bold' }, color: '#333' }\n        },\n        y: {\n          beginAtZero: true,\n          ticks: { font: { weight: 'bold' }, color: '#333' }\n        }\n      }\n    },\n    plugins: [ChartDataLabels]\n  });\n</script>\n`;\n\nconst html = `\n<html>\n<head>\n  <script src=\"https://cdn.jsdelivr.net/npm/chart.js\"></script>\n  <script src=\"https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels\"></script>\n  <style>\n    body { font-family: sans-serif; padding: 20px; background: #fff; }\n    h2 { text-align: center; margin-top: 40px; }\n    .grafico-grid {\n      display: flex;\n      flex-wrap: wrap;\n      justify-content: space-evenly;\n      gap: 40px;\n    }\n    canvas {\n      background: white;\n      box-shadow: 0 2px 8px rgba(0,0,0,0.1);\n    }\n  </style>\n</head>\n<body>\n  <div class=\"grafico-grid\">\n    <div>\n      <h2>Indicadores Gerais</h2>\n      ${grafico1}\n    </div>\n    <div>\n      <h2>Indicadores por Comercial</h2>\n      ${grafico2}\n    </div>\n    <div style=\"width: 100%;\">\n      <h2>Indicadores por Corban Master</h2>\n      ${grafico3}\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn [{ json: { html } }];"
+      },
+      "name": "Gerar HTML do Gráfico",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        -730
+      ],
+      "id": "94464510-d310-4b35-9799-15694fe85bec"
+    },
+    {
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "download",
+        "messageId": "={{ $node[\"Buscar Email Enviado\"].json[\"id\"] }}",
+        "attachmentId": "={{ $json.id }}"
+      },
+      "id": "90d5499e-1f0a-4dce-8011-ab3d08dbb7fd",
+      "name": "Baixar Anexo1",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 1,
+      "position": [
+        260,
+        -780
+      ],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "filtersUI": {
+          "values": {
+            "filterBy": "search",
+            "search": "Anexo"
+          }
+        },
+        "options": {}
+      },
+      "id": "fccc35e4-1e24-41db-947d-aff0079ce29e",
+      "name": "Buscar Email Enviado",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        -730
+      ],
+      "webhookId": "2eadb231-da46-4cdb-baa7-ea316a55e216",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messageAttachment",
+        "operation": "getAll",
+        "messageId": "={{ $node[\"Buscar Email Enviado\"].json[\"id\"] }}",
+        "additionalFields": {}
+      },
+      "name": "Listar Anexos1",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 1,
+      "position": [
+        40,
+        -780
+      ],
+      "id": "fd9a7fed-4fe6-4532-80f0-5b80b4ce91f6",
+      "alwaysOutputData": true,
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 100000,
+        "options": {}
+      },
+      "id": "05fb786e-6a56-443a-b684-1c3724482e69",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -1500,
+        -230
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx",
+        "options": {
+          "fileName": "={{ $('Iterar por Corban1').item.json.corban }}_reformalizacao.xlsx"
+        }
+      },
+      "id": "bcd0ee3d-e7bf-41e8-a9a7-aca543960130",
+      "name": "Gerar Planilha Corban",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -405
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bd6eab5c-f0d9-422a-8196-b8a9ccde1fb0",
+      "name": "Sem operação, não faça nada",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1060,
+        -130
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json[\"StatusPort\"] ? $json[\"StatusPort\"].toString().trim().toUpperCase() : \"\" }}",
+              "value2": "REFORMALIZACAO_CLIENTE"
+            }
+          ]
+        }
+      },
+      "name": "Filtrar Reformalização1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        -230
+      ],
+      "id": "052eef87-fc2e-4f35-a83e-b68c23fe2152"
+    },
+    {
+      "parameters": {
+        "functionCode": "\nconst grupos = {};\n\nfor (const item of items) {\n  const corban = item.json[\"Corban Master\"]?.toString().trim().toUpperCase() || \"DESCONHECIDO\";\n  if (!grupos[corban]) grupos[corban] = [];\n  grupos[corban].push(item.json);\n}\n\nreturn Object.entries(grupos).map(([corban, propostas]) => ({\n  json: {\n    corban,\n    propostas\n  }\n}));\n                "
+      },
+      "id": "50a5b345-75ec-4453-8ea2-300728cffa64",
+      "name": "Agrupar por Corban1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1060,
+        -330
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "71411e63-e47f-4584-9532-45e3a32d532a",
+      "name": "Iterar por Corban1",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        -840,
+        -330
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items[0].json.propostas.map(p => ({ json: p }));"
+      },
+      "id": "a5401c3b-9207-4e62-8621-88c0fc0c20c2",
+      "name": "Separar Propostas1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -405
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        40,
+        -180
+      ],
+      "id": "df515bf5-2ea3-49ff-afbc-5d23b3540da0",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "toRecipients": "={{ $('Iterar por Corban1').item.json.propostas[0]['Email Corban'] }}",
+        "subject": "Propostas Reformalizadas - Teste",
+        "bodyContent": "=<div style=\"font-family:Arial,sans-serif;\">\n \n  <p>Prezados,</p>\n \n  <p>\n\n    Encaminhamos as propostas reformalizadas vinculadas ao Corban\n<b>{{ $(\"Iterar por Corban1\").item.json.corban }}</b> para sua apreciação.\n</p>\n \n  <p style=\"background:#fff8c4;padding:10px;border:1px solid #f1c40f;margin-top:16px;\">\n\n    ⚠️ Importante: caso as propostas não sejam aprovadas no sistema,\n\n    serão consideradas inválidas por falta de atualização.\n</p>\n \n  <p style=\"margin-top:16px;font-size:14px;\">\n\n    Qualquer dúvida ou divergência, estamos à disposição.<br>\n<b>Comercial BYX</b>\n</p>\n \n</div>\n ",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "=data"
+              }
+            ]
+          },
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        -405
+      ],
+      "id": "b01a0fb0-0fb2-4055-ad18-b1651c73f2b9",
+      "name": "Microsoft Outlook4",
+      "webhookId": "36ed78eb-5b11-4b47-878a-7e4c4d0052a1",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "\n\n## Notificação para o Corban - PARCEIRO",
+        "height": 500,
+        "width": 1820,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1590,
+        -470
+      ],
+      "typeVersion": 1,
+      "id": "da23c5ed-0ca5-450d-aed6-bfd692e0946c",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "\n\n## Envio de Indicadores para o time comercial - COMERCIAL\n",
+        "height": 440,
+        "width": 3140,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1590,
+        -860
+      ],
+      "typeVersion": 1,
+      "id": "b0e091fc-b42f-4251-b132-8dfc5626ecd1",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -400,
+        -730
+      ],
+      "id": "2a82647d-e199-4a1b-804a-b0666b08bdef",
+      "name": "Wait",
+      "webhookId": "19245be0-1c3e-46f6-8ce7-2e90a04cb19f"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 10,
+        "filtersUI": {
+          "values": {
+            "filterBy": "search",
+            "search": "Anexo antigo"
+          }
+        },
+        "options": {}
+      },
+      "id": "09e7619f-c7fc-4e7a-a3b6-99eef6dee774",
+      "name": "Buscar Email Enviado1",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        -730
+      ],
+      "webhookId": "2eadb231-da46-4cdb-baa7-ea316a55e216",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "messageId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        -730
+      ],
+      "id": "dbc94697-0640-4a42-8c83-1f5c5cd86f0b",
+      "name": "Excluir anexo antigo",
+      "webhookId": "b3a0a411-9336-463a-9b6a-b8b004dba47f",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "\n\n## Atualização de planilha - COMERCIAL",
+        "height": 600,
+        "width": 1800,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1600,
+        80
+      ],
+      "typeVersion": 1,
+      "id": "c3822b74-9955-4426-8828-ad0aacb5ca30",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "01FHNYP2XEPTU3GRODNVCLFM676CC3ZQ4F",
+          "mode": "list",
+          "cachedResultName": "Arquivo alterado",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BB3E97CE4-C345-446D-B2B3-DFF085BCC385%7D&file=Arquivo%20alterado.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "{27C7CE7A-9301-4CE0-B11D-E6D94C7A3EC9}",
+          "mode": "list",
+          "cachedResultName": "Planilha1",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BB3E97CE4-C345-446D-B2B3-DFF085BCC385%7D&file=Arquivo%20alterado.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1&activeCell=Planilha1!A1"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.1,
+      "position": [
+        -1180,
+        520
+      ],
+      "id": "0f65559b-2cb7-44f6-b13e-035f8d35f2fe",
+      "name": "Alteração1",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "xW68x3aGqylmeDfw",
+          "name": "Microsoft Excel account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "readRows",
+        "workbook": {
+          "__rl": true,
+          "value": "01FHNYP2VBGRW2KBD7RJFZT632M5WQWZ7Z",
+          "mode": "list",
+          "cachedResultName": "E-mails Comercial - BASE",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "{9A0EB347-08ED-499D-AD6F-24C36AEA53C4}",
+          "mode": "list",
+          "cachedResultName": "Planilha1",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1&activeCell=Planilha1!A1"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.1,
+      "position": [
+        -1180,
+        220
+      ],
+      "id": "a13bb869-3546-43c4-8ef1-55b1550234d4",
+      "name": "Base1",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "xW68x3aGqylmeDfw",
+          "name": "Microsoft Excel account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 19
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1400,
+        380
+      ],
+      "id": "43c5db59-e68f-4bba-956e-a67877f0183d",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "PARCEIRO1",
+              "field2": "PARCEIRO"
+            },
+            {
+              "field1": "EMAILS-SOCIOS E RESPONSAVEIS1",
+              "field2": "EMAILS-SOCIOS E RESPONSAVEIS"
+            },
+            {
+              "field1": "SUPORTE OPERACIONAL1",
+              "field2": "SUPORTE OPERACIONAL"
+            },
+            {
+              "field1": "COMISSÕES E NF1",
+              "field2": "COMISSÕES E NF"
+            },
+            {
+              "field1": "CONTESTAÇÕES1",
+              "field2": "CONTESTAÇÕES"
+            }
+          ]
+        },
+        "joinMode": "keepEverything",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        -960,
+        480
+      ],
+      "id": "fc686a1a-7b11-4a02-9b7c-15c397b7bfab",
+      "name": "Conciliação1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "PARCEIRO1",
+              "field2": "PARCEIRO"
+            }
+          ]
+        },
+        "joinMode": "keepNonMatches",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        -960,
+        280
+      ],
+      "id": "f2c8d4d0-5fb1-4f75-a9e2-c2106b2476db",
+      "name": "EXTRAINDO AS DIFERENÇAS1"
+    },
+    {
+      "parameters": {
+        "resource": "worksheet",
+        "operation": "upsert",
+        "workbook": {
+          "__rl": true,
+          "value": "01FHNYP2VBGRW2KBD7RJFZT632M5WQWZ7Z",
+          "mode": "list",
+          "cachedResultName": "E-mails Comercial - BASE",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "{9A0EB347-08ED-499D-AD6F-24C36AEA53C4}",
+          "mode": "list",
+          "cachedResultName": "Planilha1",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1&activeCell=Planilha1!A1"
+        },
+        "columnToMatchOn": "PARCEIRO1",
+        "valueToMatchOn": "={{ $('Alteração1').item.json.PARCEIRO }}",
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "EMAILS-SOCIOS E RESPONSAVEIS1",
+              "fieldValue": "={{ $('Alteração1').item.json['EMAILS-SOCIOS E RESPONSAVEIS'] }}"
+            },
+            {
+              "column": "SUPORTE OPERACIONAL1",
+              "fieldValue": "={{ $('Alteração1').item.json['SUPORTE OPERACIONAL'] }}"
+            },
+            {
+              "column": "COMISSÕES E NF1",
+              "fieldValue": "={{ $('Alteração1').item.json['COMISSÕES E NF'] }}"
+            },
+            {
+              "column": "CONTESTAÇÕES1",
+              "fieldValue": "={{ $('Alteração1').item.json['CONTESTAÇÕES'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.1,
+      "position": [
+        -520,
+        480
+      ],
+      "id": "4bb4f7e4-7f2e-4a27-8e6d-9f10643118ed",
+      "name": "Microsoft Excel 365",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "xW68x3aGqylmeDfw",
+          "name": "Microsoft Excel account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c96f0541-0265-4592-82d8-587e436c5dec",
+              "leftValue": "={{ $json.PARCEIRO }}",
+              "rightValue": "={{ $json.PARCEIRO }}",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -740,
+        480
+      ],
+      "id": "b5118be0-e19e-46e0-ba1f-1a78adf67941",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "workbook": {
+          "__rl": true,
+          "value": "01FHNYP2VBGRW2KBD7RJFZT632M5WQWZ7Z",
+          "mode": "list",
+          "cachedResultName": "E-mails Comercial - BASE",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1"
+        },
+        "worksheet": {
+          "__rl": true,
+          "value": "{9A0EB347-08ED-499D-AD6F-24C36AEA53C4}",
+          "mode": "list",
+          "cachedResultName": "Planilha1",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1&activeCell=Planilha1!A1"
+        },
+        "table": {
+          "__rl": true,
+          "value": "{17786995-C256-4529-9822-388F9F957D0B}",
+          "mode": "list",
+          "cachedResultName": "Tabela13",
+          "cachedResultUrl": "https://byxcapitalsa-my.sharepoint.com/personal/samuel_souza_grupobyx_com_br/_layouts/15/Doc.aspx?sourcedoc=%7BA56D34A1-7F04-4B8A-99FB-7A676D0B67F9%7D&file=E-mails%20Comercial%20-%20BASE.xlsx&action=default&mobileredirect=true&DefaultItemOpen=1&activeCell=Planilha1!A1:E31"
+        },
+        "fieldsUi": {
+          "values": [
+            {
+              "column": "PARCEIRO1",
+              "fieldValue": "={{ $json.PARCEIRO }}"
+            },
+            {
+              "column": "EMAILS-SOCIOS E RESPONSAVEIS1",
+              "fieldValue": "={{ $json['EMAILS-SOCIOS E RESPONSAVEIS'] }}"
+            },
+            {
+              "column": "SUPORTE OPERACIONAL1",
+              "fieldValue": "={{ $json['SUPORTE OPERACIONAL'] }}"
+            },
+            {
+              "column": "COMISSÕES E NF1",
+              "fieldValue": "={{ $json['COMISSÕES E NF'] }}"
+            },
+            {
+              "column": "CONTESTAÇÕES1",
+              "fieldValue": "={{ $json['CONTESTAÇÕES'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftExcel",
+      "typeVersion": 2.1,
+      "position": [
+        -740,
+        280
+      ],
+      "id": "abc07102-fcbd-42d7-b9cf-6a984d8c370f",
+      "name": "Microsoft Excel 3653",
+      "credentials": {
+        "microsoftExcelOAuth2Api": {
+          "id": "xW68x3aGqylmeDfw",
+          "name": "Microsoft Excel account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toRecipients": "alice.santos@byx.com.br",
+        "subject": "ATUALIZAÇÃO ",
+        "bodyContent": "=\n{{ $json.html }}\n",
+        "additionalFields": {
+          "bodyContentType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        380
+      ],
+      "id": "8c360583-c7ad-4de8-9c79-872339574fb7",
+      "name": "Microsoft Outlook2",
+      "webhookId": "24491c87-7c8d-4536-8a63-95db62c4b0d0",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "Qe2BMSudb3xBYu6r",
+          "name": "Microsoft Outlook account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const excelData = $input.all().map((item) => item.json);\nconst oldData = $(\"Base1\").all().map((item) => item.json);\n\n// Timestamp ajustado corretamente para GMT-3 (Brasília)\nconst rawTimestamp = $(\"Schedule Trigger1\").all()[0]?.json?.timestamp;\nconst dataHora = rawTimestamp ? new Date(rawTimestamp) : new Date();\ndataHora.setHours(dataHora.getHours() - 3); // Corrige o fuso\nconst dataFormatada = dataHora.toLocaleString(\"pt-BR\");\nconst [data, hora] = dataFormatada.split(\", \");\n\n// Funções auxiliares\nconst isEmpty = (val) => val === null || val === undefined || val === \"\";\n\n// Separar alterações e novos Corbans\nlet alterados = [];\nlet novos = [];\n\nfor (const row of excelData) {\n  const oldRow = oldData.find(r => r[\"PARCEIRO1\"] === row[\"PARCEIRO1\"]);\n\n  if (!oldRow) {\n    novos.push(row);\n    continue;\n  }\n\n  const changedFields = [];\n\n  for (const key of Object.keys(row)) {\n    const newValue = row[key];\n    const oldValue = oldRow[key];\n\n    if (newValue !== oldValue) {\n      changedFields.push({ column: key, oldValue, newValue });\n    }\n  }\n\n  if (changedFields.length > 0) {\n    alterados.push({\n      parceiro: row[\"PARCEIRO1\"] ?? \"(Sem nome)\",\n      changes: changedFields\n    });\n  }\n}\n\n// HTML: estilo\nconst style = `\n  <style>\n    body { font-family: Arial, sans-serif; color: #222; }\n    .titulo {\n      margin: 20px 0 8px;\n      font-weight: bold;\n    }\n    table {\n      border-collapse: collapse;\n      width: 100%;\n      margin-bottom: 20px;\n    }\n    th {\n      background-color: #f2f2f2;\n      padding: 8px;\n      text-align: left;\n    }\n    td {\n      padding: 6px 8px;\n      border-bottom: 1px solid #ddd;\n    }\n    tr:nth-child(even) {\n      background-color: #fcfcfc;\n    }\n  </style>\n`;\n\n// HTML: tabela de alterados\nconst htmlAlterados = alterados.length > 0 ? `\n  <div class=\"titulo\">📝 Alterações em Corbans existentes</div>\n  <table>\n    <thead>\n      <tr>\n        <th>Parceiro</th>\n        <th>Coluna</th>\n        <th>Valor Anterior</th>\n        <th>Valor Atual</th>\n      </tr>\n    </thead>\n    <tbody>\n      ${alterados.flatMap(item =>\n        item.changes.map(change => `\n          <tr>\n            <td>${item.parceiro}</td>\n            <td>${change.column}</td>\n            <td>${change.oldValue ?? \"-\"}</td>\n            <td>${change.newValue ?? \"-\"}</td>\n          </tr>\n        `)\n      ).join(\"\")}\n    </tbody>\n  </table>\n` : \"\";\n\n// HTML: tabela de novos Corbans\nlet htmlNovos = \"\";\nif (novos.length > 0) {\n  const colunas = Object.keys(novos[0]);\n  const cabecalhos = colunas.map(c => `<th>${c}</th>`).join('');\n  const linhas = novos.map(row => `\n    <tr>${colunas.map(c => `<td>${row[c] ?? \"-\"}</td>`).join('')}</tr>\n  `).join('');\n\n  htmlNovos = `\n    <div class=\"titulo\">🆕 Corbans adicionados recentemente</div>\n    <table>\n      <thead>\n        <tr>${cabecalhos}</tr>\n      </thead>\n      <tbody>\n        ${linhas}\n      </tbody>\n    </table>\n  `;\n}\n\n// HTML final\nconst html = `\n  ${style}\n  <p>Prezado(a),</p>\n  <p>📊 Foram identificadas atualizações na planilha processada no dia <b>${data}</b>, às <b>${hora}</b>.</p>\n  ${htmlAlterados}\n  ${htmlNovos}\n  <p style=\"margin-top:16px\">\n    📩 Em caso de dúvidas ou divergências, entre em contato com a equipe responsável pela atualização.\n  </p>\n  <p><b>Atenciosamente,<br>Comercial BYX</b></p>\n`;\n\nreturn [{\n  json: {\n    html,\n    timestamp: `${data} ${hora}`,\n    alterados,\n    novos\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        380
+      ],
+      "id": "120e9b69-70e3-4cae-ae8b-4a50cf0de0a1",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "Nr Proposta",
+              "value": "={{ $json[\"Nr Proposta\"] }}"
+            },
+            {
+              "name": "Nome Cliente",
+              "value": "={{ $json[\"Nome Cliente\"] }}"
+            },
+            {
+              "name": "StatusPort",
+              "value": "={{ $json[\"StatusPort\"] }}"
+            },
+            {
+              "name": "StatusRefin",
+              "value": "={{ $json[\"StatusRefin\"] }}"
+            },
+            {
+              "name": "Corban Master",
+              "value": "={{ $json[\"Corban Master\"] }}"
+            },
+            {
+              "name": "Corban Loja",
+              "value": "={{ $json['Corban Loja'] }}"
+            },
+            {
+              "name": "Comercial",
+              "value": "={{ $json[\"Comercial\"] }}"
+            },
+            {
+              "name": "Saldo digitado",
+              "value": "={{ $json[\"Saldo digitado\"] }}"
+            },
+            {
+              "name": "Saldo retornado",
+              "value": "={{ $json[\"Saldo retornado\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Filtrar Colunas",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -1720,
+        -405
+      ],
+      "id": "3e7f09a8-429e-4b1b-8b46-3cd399acded3"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const nomeCompleto = item.json[\"Nome Cliente\"] || \"\";\n  const primeiroNome = nomeCompleto.trim().split(\" \")[0];\n  item.json[\"Nome Cliente\"] = primeiroNome;\n  return item;\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1940,
+        -400
+      ],
+      "id": "51483b83-1e74-458c-bd74-48f7e1fd4923",
+      "name": "Pegar só o primeiro nome"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        -380
+      ],
+      "id": "8a311452-9e4d-41e6-828f-6d551bd3de76",
+      "name": "Wait1",
+      "webhookId": "b3c1edb7-886a-4a97-9d7f-49c003cc2290"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receber Planilha": {
+      "main": [
+        [
+          {
+            "node": "Extrair Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Pegar só o primeiro nome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Indicadores1": {
+      "main": [
+        [
+          {
+            "node": "Gerar HTML do Gráfico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Converter HTML em Imagem": {
+      "main": [
+        [
+          {
+            "node": "Baixar Imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar Imagem": {
+      "main": [
+        [
+          {
+            "node": "Microsoft Outlook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Renomear Anexo": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Rascunho": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Microsoft Outlook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Outlook1": {
+      "main": [
+        [
+          {
+            "node": "Buscar Email Enviado1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar HTML do Gráfico": {
+      "main": [
+        [
+          {
+            "node": "Converter HTML em Imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Outlook": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar Anexo1": {
+      "main": [
+        [
+          {
+            "node": "Renomear Anexo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Email Enviado": {
+      "main": [
+        [
+          {
+            "node": "Criar Rascunho",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Listar Anexos1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar Anexos1": {
+      "main": [
+        [
+          {
+            "node": "Baixar Anexo1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Reformalização1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Planilha Corban": {
+      "main": [
+        [
+          {
+            "node": "Microsoft Outlook4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Reformalização1": {
+      "main": [
+        [
+          {
+            "node": "Agrupar por Corban1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sem operação, não faça nada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar por Corban1": {
+      "main": [
+        [
+          {
+            "node": "Iterar por Corban1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Iterar por Corban1": {
+      "main": [
+        [
+          {
+            "node": "Separar Propostas1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar Propostas1": {
+      "main": [
+        [
+          {
+            "node": "Gerar Planilha Corban",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Outlook4": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Buscar Email Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Email Enviado1": {
+      "main": [
+        [
+          {
+            "node": "Excluir anexo antigo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alteração1": {
+      "main": [
+        [
+          {
+            "node": "Conciliação1",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "EXTRAINDO AS DIFERENÇAS1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Base1": {
+      "main": [
+        [
+          {
+            "node": "Conciliação1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "EXTRAINDO AS DIFERENÇAS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Base1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alteração1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conciliação1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EXTRAINDO AS DIFERENÇAS1": {
+      "main": [
+        [
+          {
+            "node": "Microsoft Excel 3653",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Excel 365": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Microsoft Excel 365",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Excel 3653": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Microsoft Outlook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Colunas": {
+      "main": [
+        [
+          {
+            "node": "Calcular Indicadores1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar só o primeiro nome": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Colunas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Iterar por Corban1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "517a65c0-5230-4287-be0d-451a63ffb6b7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a058091ead30260252525a386ee6a97e60ad44a43676e6337c0326ef44158853"
+  },
+  "id": "ARUNN3jZVlpcl9B9",
+  "tags": []
+}
